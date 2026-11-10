@@ -3,13 +3,22 @@ import json
 import os
 import threading
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 from formal_math.config import defaults
-from formal_math.providers import BudgetError, ModelGateway, ProviderError
+from formal_math.providers import BudgetError, ModelGateway, ProviderError, _request
 
 
 class ProviderTests(unittest.TestCase):
+    def test_unreachable_endpoint_explains_tunnel_without_leaking_url_secrets(self):
+        with patch("formal_math.providers.urllib.request.urlopen", side_effect=urllib.error.URLError(ConnectionRefusedError())):
+            with self.assertRaises(ProviderError) as raised:
+                _request("http://127.0.0.1:8081/tokenize?api_key=private-value", {}, {}, 1)
+        self.assertIn("http://127.0.0.1:8081", str(raised.exception))
+        self.assertIn("SSH tunnel", str(raised.exception))
+        self.assertNotIn("private-value", str(raised.exception))
+
     def setUp(self):
         self.config = defaults()
         self.events = []

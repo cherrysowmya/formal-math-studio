@@ -39,7 +39,18 @@ def _request(url: str, payload: dict, headers: dict, timeout: float) -> dict:
         # Never echo request headers, bodies or upstream diagnostic dumps.
         raise ProviderError(f"Model service returned HTTP {exc.code}; check its model, credentials and limits") from None
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise ProviderError(f"Cannot reach model service ({type(exc).__name__}); check the local tunnel or API connection") from None
+        parsed = urllib.parse.urlsplit(url)
+        host = parsed.hostname or "configured-host"
+        authority = f"[{host}]" if ":" in host else host
+        if parsed.port:
+            authority += f":{parsed.port}"
+        endpoint = f"{parsed.scheme}://{authority}"
+        if host in {"localhost", "127.0.0.1", "::1"}:
+            guidance = "Start the configured model server or its SSH tunnel; starting the web app alone does not start inference."
+        else:
+            guidance = "Check the API connection and provider endpoint."
+        # Do not include URL credentials, query strings or raw exception text.
+        raise ProviderError(f"Cannot reach model endpoint {endpoint} ({type(exc).__name__}). {guidance}") from None
     except (ValueError, UnicodeError):
         raise ProviderError("Model service returned invalid JSON") from None
 
@@ -138,6 +149,7 @@ class ModelGateway:
 
     def chat(self, role: str, messages: list[dict]) -> dict:
         spec, provider, base, headers = self._connection(role)
+        self.emit(role, f"Connecting to {spec['provider']} using {spec['model']}", "info")
         messages = copy.deepcopy(messages)
         removed = set()
         while True:
