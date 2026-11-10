@@ -1,0 +1,114 @@
+# Copy to local.toml. Paths are resolved relative to THIS config directory.
+# Credentials belong in environment variables, never in this file.
+[app]
+output_dir = "../outputs"
+port = 8765
+
+[lean]
+project_path = "../runtime/mathlib"
+command = ["lake", "env", "lean"]
+timeout_seconds = 240
+# The launcher adds the locally installed tools to PATH. Set [] to disable LSP.
+lsp_command = ["lean-lsp-mcp"]
+
+[retrieval]
+enabled = true
+required = true
+command = ["lean-explore", "mcp", "serve", "--backend", "local"]
+cache_dir = "../runtime/lean-explore/cache"
+hf_cache_dir = "../runtime/huggingface"
+data_version = "20260714_172516"
+limit = 12
+source_limit = 4
+rerank_top = 0
+max_task_queries = 5
+max_outline_queries = 2
+max_queries = 7
+max_query_chars = 4000
+outline_query_chars = 240
+formal_chars = 12000
+discussion_chars = 6000
+fresh_chars = 8000
+informal_chars = 4000
+
+[limits]
+max_formal_attempts = 5
+max_informal_rounds = 3
+feedback_chars = 8000
+failure_chars = 6000
+failure_pairs = 2
+informal_packet_chars = 16000
+
+[providers.nvwulf_formal]
+kind = "openai_compatible"
+base_url = "http://127.0.0.1:8081/v1"
+api_key_env = "NVWULF_API_KEY"
+timeout_seconds = 1800
+
+[providers.nvwulf_informal]
+kind = "openai_compatible"
+base_url = "http://127.0.0.1:8082/v1"
+api_key_env = "NVWULF_API_KEY"
+timeout_seconds = 1200
+
+# OpenAI and Anthropic defaults are included by the application. Override a
+# role's provider AND model together, and use budgets supported by that model.
+# For Claude models requiring adaptive thinking, also configure:
+# [providers.anthropic]
+# thinking_mode = "adaptive"
+# api_version = "2023-06-01"
+# [roles.formal_initial]
+# provider = "openai"
+# model = "your-openai-model"
+# input_tokens = 8192
+# output_tokens = 32000
+# context_tokens = 40960
+#
+# [roles.informal_generator]
+# provider = "anthropic"
+# model = "your-claude-model"
+# input_tokens = 8192
+# output_tokens = 16384
+# context_tokens = 32768
+
+[roles.formal_initial]
+provider = "nvwulf_formal"
+model = "m-a-p/OProver-32B"
+input_tokens = 8192
+output_tokens = 32000
+context_tokens = 40960
+
+[roles.formal_reviser]
+provider = "nvwulf_formal"
+model = "m-a-p/OProver-32B"
+input_tokens = 12288
+output_tokens = 24576
+context_tokens = 40960
+
+[roles.informal_generator]
+provider = "nvwulf_informal"
+model = "Qwen/Qwen3-8B"
+input_tokens = 8192
+output_tokens = 16384
+context_tokens = 32768
+
+[roles.informal_reviewer]
+provider = "nvwulf_informal"
+model = "Qwen/Qwen3-8B"
+input_tokens = 12288
+output_tokens = 8192
+context_tokens = 32768
+
+[roles.discussion]
+provider = "nvwulf_informal"
+model = "Qwen/Qwen3-8B"
+input_tokens = 12288
+output_tokens = 12288
+context_tokens = 32768
+
+[roles.fresh_formal]
+provider = "nvwulf_formal"
+model = "m-a-p/OProver-32B"
+input_tokens = 8192
+output_tokens = 32000
+context_tokens = 40960

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Formal Math Studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23483f5e'/%3E%3Ctext x='20' y='28' text-anchor='middle' font-family='Georgia' font-size='29' fill='%23f6f2e9'%3E∀%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#source-code">Skip to Lean editor</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Formal Math Studio home"><span class="brand-mark" aria-hidden="true">∀</span><span>Formal Math <strong>Studio</strong></span></a>
+    <div class="topbar-right"><span class="local-indicator"><span aria-hidden="true"></span>Local workspace</span><button class="button button-quiet" id="open-settings" type="button"><span aria-hidden="true">⚙</span> Model settings</button></div>
+  </header>
+
+  <main class="workspace">
+    <section class="workspace-heading" aria-labelledby="workspace-title">
+      <div><p class="eyebrow">A WORKSPACE FOR VERIFIED MATHEMATICS</p><h1 id="workspace-title">From an idea to a Lean proof.</h1><p class="subtitle">Bring your theorem. Let the agents reason, revise, and check it with Lean.</p></div>
+      <div class="heading-detail"><span class="detail-label">VERIFICATION</span><span>Local Lean environment</span><small>Models use your configured providers</small></div>
+    </section>
+
+    <div id="connection-error" class="notice notice-error" role="alert" hidden><span id="connection-error-message"></span><button id="retry-config" type="button" class="text-button">Retry connection</button></div>
+
+    <section class="editor-workspace" aria-label="Lean proof workspace">
+      <article class="editor-panel source-panel">
+        <div class="panel-heading"><div class="panel-title"><span class="step-marker">01</span><div><h2>Source</h2><span>Your Lean file</span></div></div><div class="panel-actions"><button id="upload-button" class="button button-small" type="button"><span aria-hidden="true">↥</span> Upload .lean</button><input id="file-upload" type="file" accept=".lean,text/plain" hidden></div></div>
+        <div class="file-tab"><span class="file-icon" aria-hidden="true">λ</span><label class="sr-only" for="filename">Lean filename</label><input id="filename" value="theorem.lean" autocomplete="off" spellcheck="false" maxlength="120" aria-label="Lean filename"><span class="tab-note">EDITABLE</span></div>
+        <div class="code-editor" id="source-editor"><div id="source-lines" class="line-numbers" aria-hidden="true">1</div><label class="sr-only" for="source-code">Input Lean code</label><textarea id="source-code" class="code-input" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" placeholder="Paste your Lean code here, or upload a .lean file.&#10;&#10;Include the imports and theorem statement.&#10;Use sorry where a proof is still needed."></textarea></div>
+        <div class="editor-footer"><span id="source-meta">0 lines · 0 characters</span><span>Lean 4 <span aria-hidden="true">·</span> UTF-8</span></div>
+      </article>
+
+      <article class="editor-panel output-panel">
+        <div class="panel-heading"><div class="panel-title"><span class="step-marker">02</span><div><h2>Result</h2><span>Agent-generated Lean code</span></div></div><div class="panel-actions"><button id="copy-output" class="icon-button" type="button" title="Copy result" aria-label="Copy result" disabled><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg></button><button id="use-output" class="button button-small" type="button" disabled>Use as source <span aria-hidden="true">↖</span></button></div></div>
+        <div class="file-tab"><span class="file-icon" aria-hidden="true">λ</span><span id="output-filename">theorem.proved.lean</span><span id="output-badge" class="result-badge">AWAITING RUN</span></div>
+        <div class="output-container"><div class="empty-state" id="output-empty"><span class="empty-symbol" aria-hidden="true">⊢</span><h3>A proof starts here.</h3><p>Add a Lean file on the left, then run the agent.<br>Your result and verification status will appear here.</p></div><div id="result-editor" class="code-editor" hidden><div id="output-lines" class="line-numbers" aria-hidden="true">1</div><label class="sr-only" for="output-code">Output Lean code</label><textarea id="output-code" class="code-input" spellcheck="false" wrap="off" readonly></textarea></div></div>
+        <div class="editor-footer"><span id="output-meta">No result yet</span><button id="download-output" class="text-button" type="button" disabled>Download .lean <span aria-hidden="true">↓</span></button></div>
+      </article>
+    </section>
+
+    <section class="run-toolbar" aria-label="Agent controls">
+      <div class="run-status"><span id="status-dot" class="status-dot" aria-hidden="true"></span><div><span id="status-label">Loading configuration</span><small id="status-detail">Connecting to your local harness…</small></div></div>
+      <div class="run-controls"><span id="elapsed-time" class="elapsed-time" hidden>00:00</span><button id="cancel-run" class="button button-quiet" type="button" hidden>Stop run</button><button id="run-agent" class="button button-primary" type="button" disabled><span class="play-icon" aria-hidden="true">▶</span><span id="run-button-label">Run agent</span></button></div>
+    </section>
+    <div id="run-error" class="notice notice-error" role="alert" hidden></div>
+
+    <section class="activity-panel" aria-labelledby="activity-title">
+      <div class="activity-heading"><div><span class="eyebrow">BEHIND THE PROOF</span><h2 id="activity-title">Agent activity <span id="event-count" class="count-label">0</span></h2></div><span class="activity-note">Reasoning progress · local verification</span></div>
+      <div id="activity-empty" class="activity-empty"><span aria-hidden="true">◇</span><p>Each stage will appear here as the agents work.</p></div>
+      <ol id="activity-feed" class="activity-feed" aria-live="polite" aria-relevant="additions" aria-label="Agent progress"></ol>
+    </section>
+    <footer class="workspace-footer"><span>Formal Math Studio</span><p>A result is verified only after your configured Lean checker accepts it.</p><span>LOCAL HARNESS · FLEXIBLE MODELS</span></footer>
+  </main>
+
+  <div id="settings-backdrop" class="drawer-backdrop" hidden></div>
+  <section id="settings-panel" class="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+    <div class="drawer-heading"><div><p class="eyebrow">YOUR AGENT WORKSPACE</p><h2 id="settings-title">Model settings</h2></div><button id="close-settings" class="icon-button close-button" type="button" aria-label="Close model settings">×</button></div>
+    <p class="settings-intro">Choose the provider and model for each role. These choices apply to your next run; budgets and endpoints come from the local server configuration.</p>
+    <div id="settings-summary" class="settings-summary"></div>
+    <div id="role-settings" class="role-settings"></div>
+    <div class="provider-section"><h3>Provider connections</h3><p>Credentials stay on the server and are never returned to this page.</p><div id="provider-connections"></div></div>
+    <div class="drawer-footer"><button id="reset-settings" class="button button-quiet" type="button">Restore server defaults</button><button id="save-settings" class="button button-primary" type="button">Apply settings</button></div>
+  </section>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
