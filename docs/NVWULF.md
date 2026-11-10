@@ -22,6 +22,12 @@ export VLLM_PYTHON=/your/vllm/environment/bin/python
 sbatch deploy/nvwulf-models.slurm
 ```
 
+If the earlier NVwulf inference environment is already installed, set
+`MODEL_RUNTIME_ROOT` to its `.runtime` directory before submission. The launcher
+reuses its vLLM executables, model cache, and build-tool paths; it does not start
+the earlier agent harness or copy any local tools to the cluster. The batch shell
+loads the site's `miniconda/3` module before starting the two model services.
+
 Use the same private key in your local shell. Both servers bind `127.0.0.1`
 and require API authentication via `VLLM_API_KEY`; they are not public services.
 The job log prints the allocated compute hostname. Confirm that both servers
