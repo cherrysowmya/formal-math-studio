@@ -2,6 +2,7 @@
 
 (() => {
   const $ = (id) => document.getElementById(id);
+  const preview = document.querySelector('meta[name="formal-math-mode"]')?.content === "preview";
   const source = $("source-code");
   const output = $("output-code");
   const roleLabels = {
@@ -16,6 +17,7 @@
     system: "Workspace",
   };
   const roleOrder = ["formal_initial", "formal_reviser", "informal_generator", "informal_reviewer", "discussion", "fresh_formal"];
+  const providerLabels = { openrouter: "OpenRouter", deepseek: "DeepSeek", groq: "Groq", openai: "OpenAI", anthropic: "Anthropic" };
   const terminalStatuses = new Set(["verified", "unverified", "failed", "cancelled"]);
   const state = { config: null, overrides: {}, activeId: null, polling: false, pollingFailures: 0, currentRun: null, eventKeys: new Set(), startedAt: null, downloadUrl: null, toastTimer: null, focusBeforeSettings: null };
 
@@ -29,7 +31,7 @@
   function updateSource() {
     updateLines(source, $("source-lines"));
     $("source-meta").textContent = `${countLines(source.value).toLocaleString()} lines · ${source.value.length.toLocaleString()} characters`;
-    $("run-agent").disabled = !state.config || !!state.activeId || !source.value.trim();
+    $("run-agent").disabled = preview || !state.config || !!state.activeId || !source.value.trim();
   }
   function updateOutput(code) {
     output.value = typeof code === "string" ? code : "";
@@ -56,6 +58,7 @@
   function outputFilename(name) { return name.replace(/\.lean$/i, "") + ".proved.lean"; }
 
   async function api(path, options = {}) {
+    if (preview && path !== "./preview-config.json") throw new Error("Use the local app for proof runs, provider connections, and API-key storage.");
     const sendsJSON = ["POST", "PUT", "PATCH"].includes(options.method);
     const response = await fetch(path, { cache: "no-store", ...options, ...(sendsJSON && !options.body ? { body: "{}" } : {}), headers: { ...(sendsJSON ? { "Content-Type": "application/json" } : {}), ...options.headers } });
     let data;
@@ -161,6 +164,7 @@
   }
 
   async function startRun() {
+    if (preview) { showRunError("Open the local app to run agents and verify proofs with Lean."); return; }
     if (state.activeId || !state.config || !source.value.trim()) return;
     const filename = getFilename(); $("filename").value = filename;
     showRunError("");
@@ -210,7 +214,7 @@
       const fields = document.createElement("div"); fields.className = "role-inputs";
       const providerLabel = document.createElement("label"); providerLabel.textContent = "Provider";
       const select = document.createElement("select"); select.dataset.field = "provider"; select.setAttribute("aria-label", `${title.textContent} provider`);
-      Object.keys(providers).forEach((provider) => { const option = document.createElement("option"); option.value = provider; option.textContent = provider; select.append(option); });
+      Object.keys(providers).forEach((provider) => { const option = document.createElement("option"); option.value = provider; option.textContent = providerLabels[provider] || provider.replace(/_/g, " "); select.append(option); });
       select.value = override.provider || settings.provider;
       providerLabel.append(select);
       const modelLabel = document.createElement("label"); modelLabel.textContent = "Model";
@@ -222,28 +226,71 @@
     });
     const connections = $("provider-connections"); connections.replaceChildren();
     Object.entries(providers).forEach(([name, provider]) => {
+      const card = document.createElement("div"); card.className = "provider-card"; card.dataset.provider = name;
       const row = document.createElement("div"); row.className = "provider-connection";
       const labels = document.createElement("div"); const title = document.createElement("strong"); title.textContent = name; const endpoint = document.createElement("code"); endpoint.textContent = provider.base_url || provider.kind || "Configured by server"; labels.append(title, endpoint);
       const badge = document.createElement("span"); badge.className = "credential-badge";
       const needsKey = ["openai", "anthropic"].includes(provider.kind);
-      badge.textContent = provider.key_configured ? "KEY CONFIGURED" : needsKey ? "KEY NOT CONFIGURED" : "SERVER CONFIGURED";
+      badge.textContent = provider.key_source === ".env" ? "KEY SAVED LOCALLY" : provider.key_configured ? "KEY IN ENVIRONMENT" : needsKey ? "KEY NOT CONFIGURED" : "NO KEY CONFIGURED";
       if (needsKey && !provider.key_configured) badge.classList.add("missing");
-      row.append(labels, badge); connections.append(row);
+      row.append(labels, badge); card.append(row);
+      if (provider.key_editable) {
+        const label = document.createElement("label"); label.className = "api-key-label"; label.textContent = `${name} API key`;
+        const input = document.createElement("input"); input.type = "password"; input.dataset.field = "api-key"; input.autocomplete = "off"; input.spellcheck = false; input.autocapitalize = "off"; input.maxLength = 8192;
+        input.placeholder = provider.key_configured ? "Paste a replacement key" : "Paste your API key";
+        if (preview) { input.disabled = true; input.placeholder = "Enter API keys in the local app"; }
+        input.setAttribute("aria-label", `${name} API key`); label.append(input); card.append(label);
+        if (provider.key_source === ".env") {
+          const removeLabel = document.createElement("label"); removeLabel.className = "remove-key-label";
+          const remove = document.createElement("input"); remove.type = "checkbox"; remove.dataset.field = "remove-key";
+          remove.addEventListener("change", () => { input.disabled = remove.checked; input.value = ""; });
+          removeLabel.append(remove, document.createTextNode("Remove saved key (an exported environment key can still be used)")); card.append(removeLabel);
+        }
+      }
+      connections.append(card);
     });
-    const attempts = state.config.limits?.max_formal_attempts;
-    $("settings-summary").textContent = attempts ? `Up to ${attempts} formal attempts per run. Lean acceptance ends the search immediately.` : "The local server controls search limits and tool connections.";
   }
 
   function openSettings() {
     state.focusBeforeSettings = document.activeElement;
+    $("settings-error").hidden = true;
     renderSettings(); $("settings-backdrop").hidden = false; $("settings-panel").hidden = false;
     document.body.style.overflow = "hidden"; $("close-settings").focus();
   }
+  async function addProvider() {
+    $("settings-error").hidden = true; $("add-provider").disabled = true;
+    try {
+      const config = await api("/api/providers", { method: "POST", body: JSON.stringify({
+        name: $("new-provider-name").value.trim(), kind: $("new-provider-kind").value,
+        base_url: $("new-provider-url").value.trim()
+      }) });
+      // Preserve unsaved role choices and pasted keys while rebuilding controls.
+      const appliedOverrides = state.overrides;
+      state.overrides = { ...appliedOverrides };
+      for (const card of $("role-settings").querySelectorAll(".role-card")) {
+        state.overrides[card.dataset.role] = { provider: card.querySelector("select").value, model: card.querySelector("input").value };
+      }
+      const pending = [...$("provider-connections").querySelectorAll(".provider-card")].map(card => ({
+        name: card.dataset.provider, key: card.querySelector('[data-field="api-key"]')?.value || "",
+        remove: card.querySelector('[data-field="remove-key"]')?.checked || false
+      }));
+      state.config = config; renderSettings(); state.overrides = appliedOverrides;
+      for (const item of pending) {
+        const card = [...$("provider-connections").querySelectorAll(".provider-card")].find(card => card.dataset.provider === item.name);
+        const key = card?.querySelector('[data-field="api-key"]'); if (key) { key.value = item.key; key.disabled = item.remove; }
+        const remove = card?.querySelector('[data-field="remove-key"]'); if (remove) remove.checked = item.remove;
+      }
+      $("new-provider-name").value = ""; $("new-provider-url").value = "";
+      showToast("Provider added. Enter its key and choose a model for each role.");
+    } catch (error) { $("settings-error").textContent = error.message; $("settings-error").hidden = false; }
+    finally { $("add-provider").disabled = false; }
+  }
   function closeSettings() {
+    for (const input of $("provider-connections").querySelectorAll('input[type="password"]')) input.value = "";
     $("settings-backdrop").hidden = true; $("settings-panel").hidden = true;
     document.body.style.overflow = ""; state.focusBeforeSettings?.focus();
   }
-  function saveSettings() {
+  async function saveSettings() {
     if (!state.config) { closeSettings(); return; }
     const overrides = {};
     for (const card of $("role-settings").querySelectorAll(".role-card")) {
@@ -252,19 +299,41 @@
       const defaults = state.config.roles[name];
       if (provider !== defaults.provider || model !== defaults.model) overrides[name] = { provider, model };
     }
-    state.overrides = overrides;
-    try { localStorage.setItem("formal-math-role-overrides", JSON.stringify(overrides)); } catch { /* Storage can be unavailable in private windows. */ }
-    closeSettings(); showToast(state.activeId ? "Settings saved for the next run." : "Model settings applied.");
+    const apiKeys = {};
+    for (const card of $("provider-connections").querySelectorAll(".provider-card")) {
+      const input = card.querySelector('[data-field="api-key"]');
+      if (card.querySelector('[data-field="remove-key"]')?.checked) apiKeys[card.dataset.provider] = null;
+      else if (input?.value.trim()) apiKeys[card.dataset.provider] = input.value.trim();
+    }
+    $("save-settings").disabled = true; $("settings-error").hidden = true;
+    try {
+      if (Object.keys(apiKeys).length) state.config = await api("/api/credentials", { method: "POST", body: JSON.stringify({ api_keys: apiKeys }) });
+      state.overrides = overrides;
+      try { localStorage.setItem("formal-math-role-overrides", JSON.stringify(overrides)); } catch { /* Storage can be unavailable in private windows. */ }
+      closeSettings(); showToast(state.activeId ? "Settings saved for the next run." : "Model settings applied.");
+    } catch (error) {
+      $("settings-error").textContent = error.message; $("settings-error").hidden = false;
+    } finally {
+      for (const input of $("provider-connections").querySelectorAll('input[type="password"]')) input.value = "";
+      $("save-settings").disabled = false;
+    }
   }
 
   async function loadConfig() {
     try {
-      const config = await api("/api/config");
+      const config = await api(preview ? "./preview-config.json" : "/api/config");
       if (!config.roles || !config.providers) throw new Error("The server configuration is missing role or provider settings.");
       state.config = config; state.overrides = validOverrides(readOverrides());
       $("connection-error").hidden = true;
       if (!state.activeId && !state.currentRun) setStatus("ready", "Add a Lean file to start a locally managed proof run.");
       renderSettings(); updateSource();
+      if (preview) {
+        setStatus("ready", "Interface preview. Run the local app for agents and Lean verification.");
+        $("status-label").textContent = "Preview mode";
+        document.querySelector(".local-indicator").textContent = "Interface preview";
+        $("save-settings").disabled = true; $("add-provider").disabled = true;
+        $("settings-panel").querySelector(".provider-section > p").textContent = "API keys are entered and saved only in the local app. Key entry is disabled in this preview.";
+      }
     } catch (error) {
       $("connection-error-message").textContent = `Cannot load the local harness configuration. ${error.message}`;
       $("connection-error").hidden = false;
@@ -310,13 +379,14 @@
   $("close-settings").addEventListener("click", closeSettings);
   $("settings-backdrop").addEventListener("click", closeSettings);
   $("save-settings").addEventListener("click", saveSettings);
+  $("add-provider").addEventListener("click", addProvider);
   $("reset-settings").addEventListener("click", () => { state.overrides = {}; try { localStorage.removeItem("formal-math-role-overrides"); } catch {} renderSettings(); showToast("Server defaults restored."); });
   $("retry-config").addEventListener("click", loadConfig);
   document.addEventListener("keydown", (event) => {
     if ($("settings-panel").hidden) return;
     if (event.key === "Escape") { closeSettings(); return; }
     if (event.key === "Tab") {
-      const focusable = [...$("settings-panel").querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]")];
+      const focusable = [...$("settings-panel").querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]")].filter((item) => !item.hidden);
       const first = focusable[0]; const last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -327,5 +397,6 @@
     const seconds = Math.floor((Date.now() - state.startedAt) / 1000);
     $("elapsed-time").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   }, 1000);
+  $("preview-notice").hidden = !preview;
   updateSource(); updateOutput(""); loadConfig();
 })();

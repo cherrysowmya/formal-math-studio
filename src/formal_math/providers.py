@@ -1,18 +1,19 @@
-"""Server-side provider adapters. Credentials never pass through the browser.
+"""Server-side provider adapters. Saved credentials are never returned to clients.
 
-Counts come from the same service/model that generates the answer. There is no
-character-based fallback when the provider cannot count the rendered request.
+Native and self-hosted adapters use service-side counts. Generic hosted chat
+APIs use a conservative byte estimate when no counting API is available.
 """
 from __future__ import annotations
 
 import copy
 import json
-import os
 import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Callable
+
+from .credentials import api_keys
 
 
 class ProviderError(RuntimeError):
@@ -46,7 +47,7 @@ def _request(url: str, payload: dict, headers: dict, timeout: float) -> dict:
             authority += f":{parsed.port}"
         endpoint = f"{parsed.scheme}://{authority}"
         if host in {"localhost", "127.0.0.1", "::1"}:
-            guidance = "Start the configured model server or its SSH tunnel; starting the web app alone does not start inference."
+            guidance = "Check that the configured local model server is running."
         else:
             guidance = "Check the API connection and provider endpoint."
         # Do not include URL credentials, query strings or raw exception text.
@@ -68,6 +69,13 @@ def _without_thinking(text: str) -> str:
 class ModelGateway:
     def __init__(self, config: dict, emit: Callable, cancel: threading.Event):
         self.config, self.emit, self.cancel = config, emit, cancel
+        self._keys = {name: value for name, (value, _) in api_keys(config).items()}
+
+    def redact(self, message: str) -> str:
+        for key in self._keys.values():
+            if key:
+                message = message.replace(key, "[redacted]")
+        return message
 
     def _connection(self, role: str):
         spec = self.config["roles"][role]
@@ -76,9 +84,10 @@ class ModelGateway:
         if urllib.parse.urlsplit(base).scheme not in {"http", "https"}:
             raise ProviderError("Provider base_url must be an HTTP(S) URL")
         key_env = provider.get("api_key_env", "")
-        key = os.environ.get(key_env, "") if key_env else ""
+        key = self._keys[spec["provider"]]
         if provider["kind"] in {"openai", "anthropic"} and not key:
-            raise ProviderError(f"Set {key_env or 'the provider API key environment variable'} in the local server shell")
+            raise ProviderError("Add this provider's API key in Model settings, or set "
+                                f"{key_env or 'its API-key variable'} in the local environment")
         headers = {"Authorization": f"Bearer {key}"} if key else {}
         if provider["kind"] == "anthropic":
             headers = {"x-api-key": key, "anthropic-version": provider.get("api_version", "2023-06-01")}
@@ -102,6 +111,10 @@ class ModelGateway:
         if self.cancel.is_set():
             raise InterruptedError("Run cancelled")
         kind = provider["kind"]
+        if kind == "chat_completions":
+            # A deliberately conservative estimate for APIs without /tokenize.
+            # Actual billing usage is taken from the completion response.
+            return len(json.dumps(messages, ensure_ascii=False).encode("utf-8")) + 512
         if kind == "openai":
             payload = {"model": spec["model"], "input": messages}
             path = provider.get("count_tokens_path") or "/responses/input_tokens"
@@ -165,6 +178,8 @@ class ModelGateway:
         if self.cancel.is_set():
             raise InterruptedError("Run cancelled")
         kind = provider["kind"]
+        if kind == "chat_completions":
+            self.emit(role, "Input budget uses a conservative estimate; provider-reported usage is recorded after generation.", "info")
         if kind == "openai":
             payload = {"model": spec["model"], "input": messages, "max_output_tokens": spec["output_tokens"], "store": False}
             if provider.get("reasoning_effort"):
@@ -197,6 +212,11 @@ class ModelGateway:
             payload = {"model": spec["model"], "messages": messages, "max_tokens": spec["output_tokens"],
                        "temperature": spec.get("temperature", 1), "top_p": spec.get("top_p", .95), "stream": False,
                        "chat_template_kwargs": {**provider.get("chat_template_kwargs", {}), "enable_thinking": spec.get("thinking", True)}}
+            if kind == "chat_completions":
+                # Chat-template and thinking controls are not portable across hosted APIs.
+                payload.pop("chat_template_kwargs")
+                payload.pop("temperature")
+                payload.pop("top_p")
             response = _request(base + "/chat/completions", payload, headers, provider.get("timeout_seconds", 600))
             choices = response.get("choices", [])
             if not choices:
@@ -204,6 +224,10 @@ class ModelGateway:
             content = choices[0].get("message", {}).get("content") or ""
             finish = choices[0].get("finish_reason", "stop")
             output_count = response.get("usage", {}).get("completion_tokens", 0)
+            if kind == "chat_completions":
+                actual_input = response.get("usage", {}).get("prompt_tokens")
+                if type(actual_input) is int and actual_input >= 0:
+                    count = actual_input
         if self.cancel.is_set():
             raise InterruptedError("Run cancelled")
         if not isinstance(content, str):

@@ -14,6 +14,8 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(config["roles"]["informal_reviewer"]["output_tokens"], 8192)
         self.assertEqual(config["retrieval"]["max_queries"], 7)
         self.assertTrue(Path(config["lean"]["project_path"]).is_absolute())
+        self.assertEqual(set(config["providers"]), {"anthropic", "openai", "openrouter", "deepseek", "groq"})
+        self.assertEqual({role["provider"] for role in config["roles"].values()}, {"anthropic"})
 
     def test_context_overflow_rejected(self):
         config = load_config()
@@ -34,12 +36,13 @@ class ConfigurationTests(unittest.TestCase):
         config = load_config()
         updated = apply_overrides(config, {"formal_initial": {"provider": "openai", "model": "my-model"}})
         self.assertEqual(updated["roles"]["formal_initial"]["provider"], "openai")
-        self.assertEqual(config["roles"]["formal_initial"]["provider"], "nvwulf_formal")
+        self.assertEqual(config["roles"]["formal_initial"]["provider"], "anthropic")
 
     def test_secrets_are_not_in_public_configuration(self):
         config = load_config()
         config["roles"]["discussion"]["accidental_secret"] = "hidden-value"
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "sensitive-test-value"}):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"OPENAI_API_KEY": "sensitive-test-value"}):
+            config["app"]["env_file"] = str(Path(tmp) / ".env")
             public = public_config(config)
         self.assertTrue(public["providers"]["openai"]["key_configured"])
         self.assertNotIn("sensitive-test-value", str(public))
@@ -56,6 +59,16 @@ class ConfigurationTests(unittest.TestCase):
         config = load_config()
         config["app"]["host"] = "0.0.0.0"
         with self.assertRaisesRegex(ValueError, "loopback"):
+            validate(config)
+
+    def test_invalid_api_key_variable_and_non_dotenv_path_are_rejected(self):
+        config = load_config()
+        config["providers"]["openai"]["api_key_env"] = "NOT A VARIABLE"
+        with self.assertRaisesRegex(ValueError, "API-key environment variable"):
+            validate(config)
+        config = load_config()
+        config["app"]["env_file"] = "not-dotenv.txt"
+        with self.assertRaisesRegex(ValueError, "named .env"):
             validate(config)
 
 

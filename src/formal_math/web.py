@@ -1,4 +1,4 @@
-"""Loopback-only web application; no cloud hosting or browser-side credentials."""
+"""Loopback-only web application with local API-key storage."""
 from __future__ import annotations
 
 import json
@@ -12,6 +12,8 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from .config import apply_overrides, public_config
+from .credentials import save_api_keys
+from .provider_settings import add_provider
 from .engine import solve
 from .local_tools import LeanExplore, LeanVerifier
 from .providers import ModelGateway
@@ -71,8 +73,9 @@ class RunStore:
         return self.get(run_id)
 
     def _work(self, record, config):
-        verifier = retriever = None
+        verifier = retriever = gateway = None
         def emit(role, message, kind="info"):
+            message = gateway.redact(str(message)) if gateway is not None else str(message)
             with self.lock:
                 if len(record["events"]) < 2000:
                     record["events"].append({"seq": len(record["events"]) + 1, "time": time.time(),
@@ -95,6 +98,8 @@ class RunStore:
                 verifier, retriever = LeanVerifier(config), LeanExplore(config)
             gateway = ModelGateway(config, emit, record["cancel"])
             result = self.solver(record["code"], config, gateway.chat, verifier, retriever, emit, record["cancel"])
+            if result.get("error"):
+                result["error"] = gateway.redact(str(result["error"]))
             code = result.get("code") or record["code"]
             if record["cancel"].is_set():
                 result.update(status="cancelled", verified=False, error="Run cancelled or its time limit was reached")
@@ -122,6 +127,8 @@ class RunStore:
                 secret = os.environ.get(provider.get("api_key_env", ""), "")
                 if secret:
                     message = message.replace(secret, "[redacted]")
+            if gateway is not None:
+                message = gateway.redact(message)
             emit("system", message, "error")
             with self.lock:
                 record.update(status="cancelled" if record["cancel"].is_set() else "failed", verified=False, error=message[:2000])
@@ -232,6 +239,15 @@ def create_server(config, host="127.0.0.1", port=8765, store=None):
                     if set(data) - {"code", "filename", "role_overrides"}:
                         raise ValueError("Unsupported run settings")
                     self._send(202, runs.start(data.get("code"), data.get("filename"), data.get("role_overrides")))
+                elif path == "/api/providers":
+                    with runs.lock:
+                        add_provider(config, data)
+                    self._send(200, public_config(config))
+                elif path == "/api/credentials":
+                    if set(data) != {"api_keys"}:
+                        raise ValueError("Only api_keys may be updated here")
+                    save_api_keys(config, data["api_keys"])
+                    self._send(200, public_config(config))
                 elif match := re.fullmatch(r"/api/runs/([0-9a-f]{32})/cancel", path):
                     self._send(200, runs.cancel(match[1]))
                 else:
@@ -242,6 +258,8 @@ def create_server(config, host="127.0.0.1", port=8765, store=None):
                 self._send(409, {"error": str(exc)})
             except (ValueError, TypeError) as exc:
                 self._send(400, {"error": str(exc)})
+            except OSError:
+                self._send(500, {"error": "Could not save local settings. Check .env and .gitignore file permissions."})
 
     server = ThreadingHTTPServer((host, port), Handler)
     server.daemon_threads = True

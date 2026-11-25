@@ -1,7 +1,9 @@
 # Copy to local.toml. Paths are resolved relative to THIS config directory.
-# Credentials belong in environment variables, never in this file.
+# Paste API keys in Model settings to save them in the ignored local .env file.
+# Never put actual credentials in this configuration.
 [app]
 output_dir = "../outputs"
+env_file = "../.env"
 port = 8765
 
 [lean]
@@ -39,76 +41,48 @@ failure_chars = 6000
 failure_pairs = 2
 informal_packet_chars = 16000
 
-[providers.nvwulf_formal]
-kind = "openai_compatible"
-base_url = "http://127.0.0.1:8081/v1"
-api_key_env = "NVWULF_API_KEY"
-timeout_seconds = 1800
-
-[providers.nvwulf_informal]
-kind = "openai_compatible"
-base_url = "http://127.0.0.1:8082/v1"
-api_key_env = "NVWULF_API_KEY"
-timeout_seconds = 1200
-
-# OpenAI and Anthropic defaults are included by the application. Override a
-# role's provider AND model together, and use budgets supported by that model.
-# For Claude models requiring adaptive thinking, also configure:
-# [providers.anthropic]
-# thinking_mode = "adaptive"
-# api_version = "2023-06-01"
-# [roles.formal_initial]
-# provider = "openai"
-# model = "your-openai-model"
-# input_tokens = 8192
-# output_tokens = 32000
-# context_tokens = 40960
-#
-# [roles.informal_generator]
-# provider = "anthropic"
-# model = "your-claude-model"
-# input_tokens = 8192
-# output_tokens = 16384
-# context_tokens = 32768
+# OpenAI and Anthropic endpoints are included by the application. Set the
+# provider and model together for each override, and use budgets the model supports.
+# For a user-managed model server, add its provider as described in docs/SETUP.md.
 
 [roles.formal_initial]
-provider = "nvwulf_formal"
-model = "m-a-p/OProver-32B"
+provider = "anthropic"
+model = "claude-sonnet-5-5"
 input_tokens = 8192
 output_tokens = 32000
 context_tokens = 40960
 
 [roles.formal_reviser]
-provider = "nvwulf_formal"
-model = "m-a-p/OProver-32B"
+provider = "anthropic"
+model = "claude-sonnet-5-5"
 input_tokens = 12288
 output_tokens = 24576
 context_tokens = 40960
 
 [roles.informal_generator]
-provider = "nvwulf_informal"
-model = "Qwen/Qwen3-8B"
+provider = "anthropic"
+model = "claude-sonnet-5-5"
 input_tokens = 8192
 output_tokens = 16384
 context_tokens = 32768
 
 [roles.informal_reviewer]
-provider = "nvwulf_informal"
-model = "Qwen/Qwen3-8B"
+provider = "anthropic"
+model = "claude-sonnet-5-5"
 input_tokens = 12288
 output_tokens = 8192
 context_tokens = 32768
 
 [roles.discussion]
-provider = "nvwulf_informal"
-model = "Qwen/Qwen3-8B"
+provider = "anthropic"
+model = "claude-sonnet-5-5"
 input_tokens = 12288
 output_tokens = 12288
 context_tokens = 32768
 
 [roles.fresh_formal]
-provider = "nvwulf_formal"
-model = "m-a-p/OProver-32B"
+provider = "anthropic"
+model = "claude-sonnet-5-5"
 input_tokens = 8192
 output_tokens = 32000
 context_tokens = 40960

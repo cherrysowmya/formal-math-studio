@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install local tools only. No proof search or model serving runs on NVwulf here.
+# Install local application and proof-checking tools.
 set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_root"

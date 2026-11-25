@@ -6,17 +6,18 @@
   <meta name="color-scheme" content="light">
   <title>Formal Math Studio</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23483f5e'/%3E%3Ctext x='20' y='28' text-anchor='middle' font-family='Georgia' font-size='29' fill='%23f6f2e9'%3E∀%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/styles.css">
-  <script src="/app.js" defer></script>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#source-code">Skip to Lean editor</a>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="Formal Math Studio home"><span class="brand-mark" aria-hidden="true">∀</span><span>Formal Math <strong>Studio</strong></span></a>
+    <a class="brand" href="./" aria-label="Formal Math Studio home"><span class="brand-mark" aria-hidden="true">∀</span><span>Formal Math <strong>Studio</strong></span></a>
     <div class="topbar-right"><span class="local-indicator"><span aria-hidden="true"></span>Local workspace</span><button class="button button-quiet" id="open-settings" type="button"><span aria-hidden="true">⚙</span> Model settings</button></div>
   </header>
 
   <main class="workspace">
+    <aside id="preview-notice" class="preview-notice" hidden><div><strong>Interface preview</strong><p>Explore the editor and model settings. Proof runs, API-key storage, and Lean verification require the local app.</p></div><div><a href="http://127.0.0.1:8765/" target="_blank" rel="noopener">Open local app ↗</a><a href="https://github.com/cherrysowmya/formal-math-studio#start-locally" target="_blank" rel="noopener">Setup instructions ↗</a></div></aside>
     <section class="workspace-heading" aria-labelledby="workspace-title">
       <div><p class="eyebrow">A WORKSPACE FOR VERIFIED MATHEMATICS</p><h1 id="workspace-title">From an idea to a Lean proof.</h1><p class="subtitle">Bring your theorem. Let the agents reason, revise, and check it with Lean.</p></div>
       <div class="heading-detail"><span class="detail-label">VERIFICATION</span><span>Local Lean environment</span><small>Models use your configured providers</small></div>
@@ -57,10 +58,19 @@
   <div id="settings-backdrop" class="drawer-backdrop" hidden></div>
   <section id="settings-panel" class="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
     <div class="drawer-heading"><div><p class="eyebrow">YOUR AGENT WORKSPACE</p><h2 id="settings-title">Model settings</h2></div><button id="close-settings" class="icon-button close-button" type="button" aria-label="Close model settings">×</button></div>
-    <p class="settings-intro">Choose the provider and model for each role. These choices apply to your next run; budgets and endpoints come from the local server configuration.</p>
-    <div id="settings-summary" class="settings-summary"></div>
+    <p class="settings-intro">Choose a provider and model for each role, or add your own API connection. These choices apply to your next run; token budgets come from the local server configuration.</p>
+    <div class="provider-section"><h3>API keys and connections</h3><p>Paste your API key below and apply settings. Keys are saved in this app's local .env file, excluded from Git, and never displayed again. Leave a field blank to keep its current key.</p><div id="provider-connections"></div></div>
+    <div id="settings-error" class="notice notice-error" role="alert" hidden></div>
+    <div class="provider-card custom-provider-form">
+      <h3>Add an API provider</h3>
+      <p>Use a hosted API or your own inference endpoint. Add the connection, then enter its key above and select its model for each role.</p>
+      <label>Provider name<input id="new-provider-name" placeholder="my_provider" autocomplete="off" maxlength="48"></label>
+      <label>API protocol<select id="new-provider-kind"><option value="chat_completions">Chat Completions (OpenAI-compatible)</option><option value="anthropic">Anthropic Messages</option><option value="openai">OpenAI Responses</option><option value="openai_compatible">Self-hosted chat with /tokenize</option></select></label>
+      <label>API base URL<input id="new-provider-url" type="url" placeholder="https://your-provider.example/v1" autocomplete="off"></label>
+      <button id="add-provider" class="button" type="button">Add provider</button>
+    </div>
+    <div class="provider-help"><h3>Your own model server</h3><p>Upload your model weights and supporting files to your own GPU server and start its inference service. Use Add an API provider to connect its endpoint, then select its provider and served model below. Server setup and model uploads are managed by you.</p></div>
     <div id="role-settings" class="role-settings"></div>
-    <div class="provider-section"><h3>Provider connections</h3><p>Credentials stay on the server and are never returned to this page.</p><div id="provider-connections"></div></div>
     <div class="drawer-footer"><button id="reset-settings" class="button button-quiet" type="button">Restore server defaults</button><button id="save-settings" class="button button-primary" type="button">Apply settings</button></div>
   </section>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

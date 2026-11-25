@@ -5,11 +5,21 @@ file or type a theorem, run the agent system, inspect the resulting Lean code,
 and download the output file.
 
 The browser, orchestration, Lean compiler, optional Lean LSP inspection,
-LeanExplore retrieval, and output storage run on your computer. Model inference
-uses independently configured providers: OpenAI, Anthropic, or open-weight
-models served on NVwulf through SSH tunnels. No application hosting is needed.
+LeanExplore retrieval, and output storage run on your computer. Each model role
+can use Anthropic, OpenAI, or a configured OpenAI-compatible model service.
 
 ## Start locally
+
+The [GitHub Pages site](https://cherrysowmya.github.io/formal-math-studio/)
+is an interface preview. It supports exploring the editor and provider choices.
+Running agents, saving API keys to `.env`, and verifying Lean proofs require the
+local app below. The public preview disables key entry and proof execution.
+GitHub Pages serves static files; it does not host the Python backend.
+
+The Pages workflow tests the application and publishes only the frontend assets
+and preset configuration. It never uploads local settings, API keys, outputs,
+Lean dependencies, or model files. To build the same preview locally, run
+`python3 scripts/build-pages.py` and serve `_site/` with a static web server.
 
 Requires Python 3.11+ for the application, Python 3.13 for the optional local tool
 environments, and a prepared Lean/Mathlib project. The web application itself
@@ -21,11 +31,14 @@ python3 -m venv .venv
 cp config/example.toml config/local.toml
 # Prepare local Lean, Mathlib, LeanExplore, and optional LSP tooling:
 bash scripts/setup-local.sh
-# Connect model endpoints, or configure API providers as described below.
 bash scripts/run-local.sh
 ```
 
-Open **http://127.0.0.1:8765**. The app deliberately binds to loopback. Each run
+Open **http://127.0.0.1:8765**, open **Model settings**, paste your Anthropic or
+OpenAI API key, and click **Apply settings**. The app saves keys in the repository's
+local `.env` file and loads them automatically on later runs.
+
+The app deliberately binds to loopback. Each run
 writes `input.lean`, an output `.lean` file, and public progress/usage metadata
 under the configured local output directory. Source files and model messages
 are sent only to the model providers selected for that run. Do not use confidential
@@ -35,8 +48,7 @@ The application can also run directly with `bash scripts/run-local.sh` without
 installing the Python package; the script uses Python 3 and the checked-out
 source when `.venv` is absent. Local Lean/retrieval tools still need preparation.
 
-See [local setup](docs/SETUP.md) for using an existing Lean installation and
-[NVwulf model serving](docs/NVWULF.md) for model-only deployment and tunneling.
+See [local setup](docs/SETUP.md) for using an existing Lean installation.
 
 ## Workflow
 
@@ -66,46 +78,84 @@ original theorem rather than adopting model-generated declarations.
 
 Every role has its own provider, model, input/output caps, and context window.
 The settings drawer lets you select provider/model per role for a run. Budgets,
-service URLs, tool commands, and credentials are controlled by the local TOML
-configuration and server environment; the browser cannot replace service URLs
-or execute commands.
+tool commands come from the local TOML configuration. Provider connections can
+be added in Model settings. API keys
+can be entered in the website and saved locally. Existing connections cannot be overwritten by the browser; tool commands remain
+server-controlled.
 
-Default routing is `m-a-p/OProver-32B` for formal work and `Qwen/Qwen3-8B` for
-informal roles. Both use NVwulf endpoints forwarded to local ports 8081/8082.
+All six roles use Claude Sonnet 5.5 (`claude-sonnet-5-5`) with adaptive thinking
+by default.
 
-For APIs, export credentials in the same shell that launches the local app:
+Paste credentials into the password fields under **Model settings → API keys and
+connections**. Click **Apply settings** to save them to `.env` with owner-only file
+permissions. Saved values are never returned by the server or stored in browser
+storage. Blank fields keep existing keys; the removal checkbox deletes a saved key.
+`.env` and its temporary files are excluded by `.gitignore`; `.env.example` contains
+empty placeholders only. The app reads `.env` as data, without executing shell code.
 
-```bash
-export OPENAI_API_KEY='your-key'
-export ANTHROPIC_API_KEY='your-key'
-bash scripts/run-local.sh
-```
+Exported `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` variables remain supported as
+fallbacks. A nonempty saved `.env` key takes precedence over an exported key. Changes
+apply to new runs; a run already in progress retains its original credentials.
+By default `.env` lives in the working directory (the repository root when using
+the launcher). Set `app.env_file` to another local `.env` path if needed; its parent
+directory must already exist. Ignore rules are maintained alongside that file.
 
-Then choose a provider and an actual model name available to your account in
-the settings drawer. Configure model-specific budgets in TOML if its limits
-differ from the defaults. For a permanent route, override the corresponding
+To use OpenAI, enter its key and select OpenAI and a model available to your
+account in the settings drawer. Configure model-specific budgets in TOML if its
+limits differ from the defaults. For a permanent route, override the corresponding
 `[roles.formal_initial]`, `[roles.formal_reviser]`, etc. tables in
-`config/local.toml`. Keys are read from environment-variable names, never stored
-in source or browser storage. `.env.example` is documentation; the server does
-not automatically execute or load `.env` files.
+`config/local.toml`. Store only the API-key variable name in that configuration,
+never the key itself.
 
-For Claude models requiring adaptive thinking, set `thinking_mode = "adaptive"`
-under `[providers.anthropic]`. The same thinking configuration is supplied to
-both token counting and generation. Provider API versions are configurable.
+For an open-weight model, bring your own running inference server and served
+model name. You arrange GPU access, upload the model weights and supporting
+files, and run the service yourself. Add a generic OpenAI-compatible provider
+to `config/local.toml`, restart the app, and select it for the desired roles.
+See [connection setup](docs/SETUP.md#bring-your-own-model-server). This repository
+does not include GPU provisioning, model uploads, model-serving scripts, or
+inference model weights.
+
+The same thinking configuration is supplied to both token counting and
+generation. For a Claude model that requires a fixed thinking budget, set
+`thinking_mode = "enabled"` under `[providers.anthropic]`. Provider API
+versions are configurable.
 
 Provider protocols:
 
 - OpenAI: Responses generation and `/responses/input_tokens` counting.
 - Anthropic: Messages generation and `/messages/count_tokens` counting.
-- NVwulf/vLLM: OpenAI-compatible chat completions and `/tokenize` using the same
+- OpenAI-compatible services: chat completions and `/tokenize` using the same
   model's chat template, including the thinking setting.
 
-Exact service-side token counting is required before generation. An endpoint
-without the supported counting API fails visibly instead of silently guessing.
+Native OpenAI/Anthropic and self-hosted adapters require service-side token
+counting. Hosted Chat Completions providers use a conservative UTF-8 byte estimate
+plus a formatting allowance before generation, and record actual prompt usage
+from the response when available. This estimate may trim more evidence than
+necessary and cannot guarantee the exact count for every model or chat template.
 Optional evidence is removed as whole records to fit; the immutable task,
 current goal, proposal under review, and current proof candidate are retained.
 Thinking tokens share the output allowance. No private reasoning transcripts
 are copied to the reviewer or saved in run metadata.
+
+## Additional API providers
+
+Model settings includes OpenRouter, DeepSeek, and Groq, in addition to OpenAI
+and Anthropic. Paste the chosen provider's key and enter its exact model ID for
+each role. OpenRouter uses IDs such as `vendor/model`; model availability and
+supported output limits depend on the provider and account.
+
+Use **Add an API provider** for other services. Enter a unique connection name,
+API protocol, and base URL, then add its key in the new password field. Connections
+are saved locally in Git-ignored `providers.local.json` and reload automatically;
+keys remain separately in `.env`. Adding a provider does not contact its server.
+Choose Chat Completions for compatible hosted APIs, Anthropic Messages or OpenAI
+Responses for those protocols, or the self-hosted option for exact `/tokenize`
+counting. Arbitrary vendor-specific protocols require an adapter or a compatible
+endpoint. Configure role budgets in TOML to match the chosen model's limits.
+
+API references: [OpenRouter](https://openrouter.ai/docs/api/reference/overview),
+[DeepSeek](https://api-docs.deepseek.com/), and
+[Groq](https://console.groq.com/docs/openai).
 
 ## Baseline budgets
 
@@ -160,7 +210,7 @@ local verification and unbounded inference requests.
 ## Repository scope
 
 This repository contains application source, local frontend assets,
-configuration examples, setup/deployment scripts, and focused runtime tests.
+configuration examples, local tool setup scripts, and focused runtime tests.
 It contains no evaluation corpora, scoring runners, archived research results,
 downloaded model weights, or vendored tool repositories. Mathlib and the
 LeanExplore library index are runtime dependencies fetched outside the tracked

@@ -4,12 +4,16 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+_site/
 .DS_Store
-.env
-.env.*
-!.env.example
 config/local.toml
+providers.local.json
 runtime/
 outputs/
 .coverage
 .pytest_cache/
+
+# Local API credentials
+.env
+.env.*
+!.env.example

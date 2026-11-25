@@ -1,8 +1,8 @@
 # Local setup
 
 The browser interface, orchestration, Lean compiler, goal inspection, retrieval,
-and generated files all run on your machine. Model inference is selected per
-role: an API provider, or an SSH-forwarded model service on NVwulf.
+and generated files all run on your machine. Select a model provider for each
+role. The default is Anthropic's Claude Sonnet 5.5.
 
 Requirements: Python 3.11+ for the application, Git, and [elan](https://github.com/leanprover/elan)
 for Lean. The pinned optional tool environments require Python 3.13. Set
@@ -15,6 +15,20 @@ bash scripts/setup-local.sh all
 bash scripts/run-local.sh
 ```
 
+Open **http://127.0.0.1:8765 → Model settings**, paste your provider's API key,
+and click **Apply settings**. Choose the provider and served model for each role.
+Keys are saved to the local `.env` file with owner-only permissions and are
+loaded automatically. Both `.env` and its temporary files are Git-ignored. The
+page shows whether a key is configured, never its saved value. Blank fields
+keep the existing key; use the removal checkbox to delete a saved key.
+
+You can also copy `.env.example` to `.env` and fill it in locally, or export
+`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` before launching. A nonempty `.env` key
+takes precedence over the corresponding shell variable. The file is read as
+data, not sourced as a shell script. By default it lives in the launcher's working
+directory, the repository root. `app.env_file` can select a different local file
+named `.env`. Never put actual keys in TOML, source code, or version control.
+
 Setup stages can be run separately: `app`, `lean`, `retrieval`, and `lsp`.
 Setup downloads dependencies and compiled library artifacts. It never downloads
 evaluation problems, expected solutions, or proof-search workloads.
@@ -24,7 +38,7 @@ The local Lean project is Mathlib commit
 `setup-local.sh lean` refuses to overwrite a different existing checkout.
 Alternatively set `lean.project_path` in your TOML configuration to an already
 prepared compatible Lean project. Uploaded imports must exist in that project.
-All configured filesystem paths are local paths, not NVwulf paths.
+All configured filesystem paths refer to your local machine.
 
 ## Local tool configuration
 
@@ -70,6 +84,43 @@ is disabled. The index version can differ from the verification project's
 library revision; Lean compilation determines whether a retrieved declaration
 is actually available and applicable.
 
+## Bring your own model server
+
+For open-weight inference, users supply their own GPU server, model weights,
+tokenizer, supporting files, and running inference service. Upload those files
+directly to your GPU server using your own tools. The app does not provision GPUs,
+upload or load inference models, launch model servers, or establish tunnels.
+Only Lean files are uploaded through the proof interface.
+
+The application connects to an existing HTTP(S) endpoint. Use **Model settings →
+Add an API provider** and choose the self-hosted protocol for a server with
+`/tokenize`, or Chat Completions for a compatible hosted API. Enter your served
+model ID for each role. Alternatively add a provider to
+the ignored `config/local.toml` (create it from `config/example.toml` if needed):
+
+```toml
+[providers.my_model_server]
+kind = "openai_compatible"
+base_url = "https://your-model-server.example/v1"
+api_key_env = "MODEL_SERVER_API_KEY"
+timeout_seconds = 600
+```
+
+Replace the URL with your own reachable endpoint. Restart the local app, then
+select `my_model_server` and the exact model name served by that endpoint for
+each desired role in **Model settings**. If the service requires a key, paste it
+into that provider's password field; it is saved to `.env` too. For a service
+without authentication, omit `api_key_env`. Use HTTPS for remote credentials,
+or a loopback endpoint made available through a connection you manage yourself.
+
+The service must support `/v1/chat/completions` and a `/tokenize` endpoint
+accepting `model`, `messages`, `add_generation_prompt`, and
+`chat_template_kwargs`, returning an integer `count` for the same model's rendered
+prompt. `count_tokens_path` can override the counting path relative to the server
+origin. A generic chat endpoint without this counting protocol is insufficient.
+Configure each role's token budgets and context window to fit your served model.
+Connection details alone do not start an inference service.
+
 ## Proof acceptance
 
 The application accepts named `theorem`/`lemma` tasks supported by the proof-slot
@@ -85,7 +136,3 @@ Uploaded Lean code runs in your local Lean environment. This is a personal local
 tool for code you trust, not an execution sandbox for untrusted internet users.
 Do not expose its HTTP server to the public internet. Output files and run
 records are generated locally under the configured output directory.
-
-No local LLM is required: configure provider API keys in your shell, or follow
-[NVwulf model serving](NVWULF.md) for open-weight inference. Keys belong in local
-environment variables and must not be committed or pasted into the browser.
