@@ -42,4 +42,4 @@ if [[ "$stage" == lsp || "$stage" == all ]]; then
   "$python_bin" -m venv runtime/lean-lsp/.venv
   runtime/lean-lsp/.venv/bin/python -m pip install 'lean-lsp-mcp==0.14.1' 'leanclient==0.5.5'
 fi
-echo 'Local setup completed. See docs/SETUP.md for the tool configuration and provider selection.'
+echo 'Local setup completed. See README.md for the tool configuration and provider selection.'

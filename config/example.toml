@@ -43,7 +43,7 @@ informal_packet_chars = 16000
 
 # OpenAI and Anthropic endpoints are included by the application. Set the
 # provider and model together for each override, and use budgets the model supports.
-# For a user-managed model server, add its provider as described in docs/SETUP.md.
+# For a user-managed model server, add its provider as described in README.md.
 
 [roles.formal_initial]
 provider = "anthropic"
