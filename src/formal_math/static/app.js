@@ -17,7 +17,7 @@
     system: "Workspace",
   };
   const roleOrder = ["formal_initial", "formal_reviser", "informal_generator", "informal_reviewer", "discussion", "fresh_formal"];
-  const providerLabels = { openrouter: "OpenRouter", deepseek: "DeepSeek", groq: "Groq", openai: "OpenAI", anthropic: "Anthropic" };
+  const providerLabels = { openrouter: "OpenRouter", deepseek: "DeepSeek", groq: "Groq", openai: "OpenAI", anthropic: "Claude" };
   const terminalStatuses = new Set(["verified", "unverified", "failed", "cancelled"]);
   const state = { config: null, overrides: {}, activeId: null, polling: false, pollingFailures: 0, currentRun: null, eventKeys: new Set(), startedAt: null, downloadUrl: null, toastTimer: null, focusBeforeSettings: null };
 
@@ -226,20 +226,21 @@
     });
     const connections = $("provider-connections"); connections.replaceChildren();
     Object.entries(providers).forEach(([name, provider]) => {
+      const displayName = providerLabels[name] || name;
       const card = document.createElement("div"); card.className = "provider-card"; card.dataset.provider = name;
       const row = document.createElement("div"); row.className = "provider-connection";
-      const labels = document.createElement("div"); const title = document.createElement("strong"); title.textContent = name; const endpoint = document.createElement("code"); endpoint.textContent = provider.base_url || provider.kind || "Configured by server"; labels.append(title, endpoint);
+      const labels = document.createElement("div"); const title = document.createElement("strong"); title.textContent = displayName; const endpoint = document.createElement("code"); endpoint.textContent = provider.base_url || provider.kind || "Configured by server"; labels.append(title, endpoint);
       const badge = document.createElement("span"); badge.className = "credential-badge";
       const needsKey = ["openai", "anthropic"].includes(provider.kind);
       badge.textContent = provider.key_source === ".env" ? "KEY SAVED LOCALLY" : provider.key_configured ? "KEY IN ENVIRONMENT" : needsKey ? "KEY NOT CONFIGURED" : "NO KEY CONFIGURED";
       if (needsKey && !provider.key_configured) badge.classList.add("missing");
       row.append(labels, badge); card.append(row);
       if (provider.key_editable) {
-        const label = document.createElement("label"); label.className = "api-key-label"; label.textContent = `${name} API key`;
+        const label = document.createElement("label"); label.className = "api-key-label"; label.textContent = `${displayName} API key`;
         const input = document.createElement("input"); input.type = "password"; input.dataset.field = "api-key"; input.autocomplete = "off"; input.spellcheck = false; input.autocapitalize = "off"; input.maxLength = 8192;
         input.placeholder = provider.key_configured ? "Paste a replacement key" : "Paste your API key";
         if (preview) { input.disabled = true; input.placeholder = "Enter API keys in the local app"; }
-        input.setAttribute("aria-label", `${name} API key`); label.append(input); card.append(label);
+        input.setAttribute("aria-label", `${displayName} API key`); label.append(input); card.append(label);
         if (provider.key_source === ".env") {
           const removeLabel = document.createElement("label"); removeLabel.className = "remove-key-label";
           const remove = document.createElement("input"); remove.type = "checkbox"; remove.dataset.field = "remove-key";

@@ -89,7 +89,7 @@ is processed at a time, with a two-hour run limit.
 
 ## Choose model providers and save keys
 
-Built-in connections include **OpenRouter, DeepSeek, Groq, OpenAI, and Anthropic**.
+Built-in connections include **OpenRouter, DeepSeek, Groq, OpenAI, and Claude**.
 Enter the exact model ID offered by your account for every role you change.
 OpenRouter uses IDs such as `vendor/model`. Set token limits to values supported
 by that model; choosing a provider does not adjust the limits automatically.
@@ -109,11 +109,11 @@ contact an inference server. Tool commands remain controlled by local TOML.
 | API protocol | Use |
 | --- | --- |
 | Chat Completions (OpenAI-compatible) | Compatible hosted APIs, including OpenRouter, DeepSeek, and Groq |
-| Anthropic Messages | Messages generation and `/messages/count_tokens` |
+| Claude Messages | Messages generation and `/messages/count_tokens` |
 | OpenAI Responses | Responses generation and `/responses/input_tokens` |
 | Self-hosted chat with `/tokenize` | Chat Completions with exact server-side prompt counting |
 
-Native OpenAI/Anthropic and self-hosted adapters require the corresponding
+Native OpenAI/Claude and self-hosted adapters require the corresponding
 counting API. Hosted Chat Completions uses a conservative UTF-8 byte estimate
 with a formatting allowance, then records actual usage from the response when
 provided. The estimate can remove more optional evidence than necessary and
